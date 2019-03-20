@@ -14,48 +14,45 @@
 
 #include <mutex>
 #include <ostream>
+#include <functional>
+#include <string>
 
-#include "curl_client.h"
+using LogHandler = std::function<void (std::string& message)> ;
 
 namespace spdlog {
 namespace sinks {
 template<typename Mutex>
-class vrv_sink final : public base_sink<Mutex>
+class customized_sink final : public base_sink<Mutex>
 {
 public:
-    explicit vrv_sink(std::string &url, std::string &name, CURLClient *client)
-        : url_(url)
-        , name_(name)
-        , client_(client)
+    explicit customized_sink(LogHandler handler): 
+		handler_(handler)
     {
     }
-    vrv_sink(const vrv_sink &) = delete;
-    vrv_sink &operator=(const vrv_sink &) = delete;
+
+    customized_sink(const customized_sink &) = delete;
+    customized_sink &operator=(const customized_sink &) = delete;
 
 protected:
     void sink_it_(const details::log_msg &msg) override
     {
         fmt::memory_buffer formatted;
         sink::formatter_->format(msg, formatted);
-        std::string url = url_ + "name=";
-        url += name_;
         std::string message(formatted.data(), formatted.size());
 
-        if (client_)
-        {
-            client_->AddHttpTask(this, url, message);
+        if (handler_){
+            handler_(message);
         }
     }
 
     void flush_() override {}
 
-    std::string url_;
-    std::string name_;
-    CURLClient *client_;
+private:
+	LogHandler handler_;
 };
 
-using vrv_sink_mt = vrv_sink<std::mutex>;
-using vrv_sink_st = vrv_sink<details::null_mutex>;
+using customized_sink_mt = customized_sink<std::mutex>;
+using customized_sink_st = customized_sink<details::null_mutex>;
 
 } // namespace sinks
 } // namespace spdlog
